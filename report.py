@@ -14,6 +14,12 @@ import reportlab
 from PIL import Image
 
 ROOT = Path(__file__).parent
+def asset_path(filename):
+    for directory in (ROOT/'public', ROOT/'dist'):
+        path = directory/filename
+        if path.is_file(): return path
+    raise FileNotFoundError(f'Missing PDF image asset: {filename}')
+
 FONTDIR = Path(os.environ.get('PYD_FONT_DIR', str(Path(os.environ.get('WINDIR','C:/Windows'))/'Fonts')))
 BUNDLED_FONTS = Path(reportlab.__file__).parent/'fonts'
 for name, file, fallback in [('Body','arial.ttf','Vera.ttf'), ('Bold','arialbd.ttf','VeraBd.ttf'), ('Title','georgia.ttf',None)]:
@@ -51,9 +57,9 @@ def render(data):
     i=data['inputs'];r=data['results'];recipient=str(data['preparedFor']).strip()[:120]
     date=data.get('reportDate',''); wt=r['wholetail'];rt=r['retail'];ass=r['assignment'];bh=r['buyHold'];a=bh['ltv80'];b=bh['ltv75']
     profile=data['advisor']; title='Peter Calculator'; advisor='Peter Diamond, CBE®'
-    logo=ImageReader(str(ROOT/'public/peter-banner.png'))
-    bank=ImageReader(str(ROOT/'public/bankability-wide.png'))
-    footer_logo=ImageReader(str(ROOT/'public/bankability.png'))
+    logo=ImageReader(str(asset_path('peter-banner.png')))
+    bank=ImageReader(str(asset_path('bankability-wide.png')))
+    footer_logo=ImageReader(str(asset_path('bankability.png')))
     buff=io.BytesIO()
     doc=SimpleDocTemplate(buff,pagesize=(612,792),leftMargin=48,rightMargin=48,topMargin=238,bottomMargin=54,title=title+' - '+recipient,author=advisor)
     def frame(c,d):

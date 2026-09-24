@@ -1,0 +1,21 @@
+.account-bar { display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:14px 0; font-size:13px; }
+.account-bar span { flex:1; min-width:160px; overflow-wrap:anywhere; color:var(--text-muted); }
+.account-button { border:1px solid var(--border-med); border-radius:8px; padding:10px 14px; background:#fff; color:var(--green-dark); font:600 13px 'DM Sans',sans-serif; cursor:pointer; }
+.account-button:disabled { opacity:.55; cursor:default; }
+.account-button.primary { background:var(--green-dark); color:#fff; border-color:var(--green-dark); }
+.account-dialog { margin:auto; width:min(640px,calc(100% - 28px)); max-height:85dvh; padding:24px; border:1px solid var(--border); border-radius:16px; color:var(--text); background:var(--cream,#faf9f6); box-shadow:0 18px 80px #0003; }
+.account-dialog::backdrop { background:#092d2580; }
+.account-dialog header { display:flex; gap:16px; align-items:center; justify-content:space-between; margin-bottom:18px; }
+.account-dialog h2 { margin:0; font:28px 'DM Serif Display',serif; }
+.account-dialog p,.account-dialog label { font-size:14px; line-height:1.6; }
+.account-dialog input,.account-dialog select { width:100%; padding:12px; margin:8px 0 16px; background:#fff; border:1px solid var(--border-med); border-radius:8px; color:var(--text); font:14px 'DM Sans',sans-serif; }
+.account-dialog :focus-visible,.account-bar :focus-visible { outline:2px solid var(--green); outline-offset:3px; }
+.history-list { display:grid; gap:12px; margin:16px 0; }
+.history-item { background:#fff; border:1px solid var(--border); border-radius:10px; padding:16px; overflow-wrap:anywhere; }
+.history-item h3 { margin:0 0 6px; font:600 15px 'DM Sans',sans-serif; }
+.history-item p { color:var(--text-muted); margin:4px 0 12px; font-size:12px; }
+.history-item a { display:inline-block; }
+.history-notice { min-height:22px; color:var(--text-muted); font-size:13px; }
+.history-save { margin:0 0 14px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-size:12px; color:var(--text-muted); }
+[hidden] { display:none !important; }
+@media(max-width:480px) { .account-dialog { padding:18px; } .account-bar .account-button { flex:1; } .account-bar span { flex-basis:100%; } }

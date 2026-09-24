@@ -17,6 +17,7 @@ out/
 .env.production.local
 *.env
 *.env.*
+!.env.example
 
 # Logs
 npm-debug.log*

@@ -33,6 +33,7 @@
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
 <script src="/advisor-config.js"></script>
+<script type="module" src="/src/accounts.mjs"></script>
 <style>
   .recipient-panel { text-align:center; padding-top:64px !important; }
   .recipient-panel input { font-family:'DM Sans',sans-serif !important; font-weight:800; text-align:center; font-size:30px !important; }
@@ -66,6 +67,7 @@
   .download-pdf-btn { background:var(--green-dark); color:white; border:0; border-radius:10px; padding:13px 20px; font:600 14px 'DM Sans',sans-serif; cursor:pointer; }
   .download-pdf-btn:disabled { opacity:.5; cursor:default; }
   #pdf-status { font-size:12px; color:var(--text-muted); }
+  #pdf-save-link { color:var(--green-dark); font:600 13px 'DM Sans',sans-serif; text-underline-offset:3px; }
   .preview-notice { padding:9px 14px; margin:0 0 14px; border-radius:8px; background:var(--amber-light); color:var(--amber-dark); font-size:12px; line-height:1.5; }
   @media(max-width:480px) { .advisor-header { gap:18px; } .advisor-name { font-size:18px; } .recipient-panel input { font-size:23px; } }
 
@@ -686,6 +688,32 @@
 <body>
 
 <div class="app">
+  <nav class="account-bar" aria-label="Account">
+    <span id="account-label" role="status">Sign in to keep your results across devices.</span>
+    <button id="account-sign-in" class="account-button">Sign in / Create account</button>
+    <button id="account-history" class="account-button" hidden>My Results</button>
+    <button id="account-sign-out" class="account-button" hidden>Sign out</button>
+  </nav>
+  <dialog id="auth-dialog" class="account-dialog" aria-labelledby="auth-title">
+    <header><h2 id="auth-title">Keep your results</h2><button class="account-button" data-close-dialog="auth-dialog" aria-label="Close sign-in">Close</button></header>
+    <p>One account for all our calculators. Get a sign-in link by email, then access your saved original PDFs on any device.</p>
+    <form id="auth-form">
+      <label for="auth-email">Email address</label>
+      <input id="auth-email" type="email" autocomplete="email" required maxlength="254" placeholder="you@example.com">
+      <button id="auth-submit" class="account-button primary" type="submit">Email me a sign-in link</button>
+    </form>
+    <p id="auth-notice" role="status" aria-live="polite"></p>
+    <p>While signed in, each analysis saves its recipient, property details, results, and original PDF privately to your account.</p>
+  </dialog>
+  <dialog id="history-dialog" class="account-dialog" aria-labelledby="history-title">
+    <header><h2 id="history-title">My Results</h2><button class="account-button" data-close-dialog="history-dialog" aria-label="Close results">Close</button></header>
+    <label for="history-calculator">Calculator</label>
+    <select id="history-calculator"><option value="">All calculators</option></select>
+    <button id="history-refresh" class="account-button">Refresh results</button>
+    <p id="history-notice" class="history-notice" role="status" aria-live="polite"></p>
+    <div id="history-list" class="history-list"></div>
+    <button id="history-more" class="account-button" hidden>Load more</button>
+  </dialog>
   <div class="card" id="input-card">
   <section class="recipient-panel" aria-label="Report recipient">
     <label for="preparedFor">EXCLUSIVELY PREPARED FOR</label>
@@ -703,9 +731,11 @@
     </div>
 
   <div id="preview-notice" class="preview-notice" hidden>Local review version — calculations work; email delivery and CRM submission are off.</div>
+  <div class="history-save" role="status"><span id="history-save-status"></span><button id="history-save-retry" class="account-button" hidden>Retry save</button></div>
   <div class="report-actions">
     <button id="download-pdf" class="download-pdf-btn" disabled>Download PDF</button>
     <span id="pdf-status" role="status" aria-live="polite">Analyze a deal to create your PDF.</span>
+    <a id="pdf-save-link" hidden>Save PDF</a>
   </div>
 
 
@@ -1249,7 +1279,22 @@ const ADVISOR_PROFILE = window.ADVISOR_PROFILE;
 let lastAnalyzedReport = null;
 const pdfButton = document.getElementById('download-pdf');
 const pdfStatus = document.getElementById('pdf-status');
+const pdfSaveLink = document.getElementById('pdf-save-link');
+function createPdfTimeoutSignal(milliseconds, abortSignalType = typeof AbortSignal === 'undefined' ? undefined : AbortSignal) {
+  return abortSignalType && typeof abortSignalType.timeout === 'function'
+    ? abortSignalType.timeout(milliseconds)
+    : undefined;
+}
+let pdfObjectUrl = null;
+function clearPdfDownload() {
+  pdfSaveLink.hidden = true;
+  pdfSaveLink.removeAttribute('href');
+  if (pdfObjectUrl) URL.revokeObjectURL(pdfObjectUrl);
+  pdfObjectUrl = null;
+}
 function invalidateReport() {
+  window.dispatchEvent(new Event('calculator:invalidated'));
+  clearPdfDownload();
   lastAnalyzedReport = null;
   pdfButton.disabled = true;
   pdfStatus.textContent = 'Analyze the updated deal to create your PDF.';
@@ -1264,21 +1309,24 @@ pdfButton.addEventListener('click', async () => {
   pdfButton.textContent = 'Creating PDF…';
   pdfStatus.textContent = 'Preparing your branded report…';
   try {
-    const response = await fetch('/api/report', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(report)});
-    if(!response.ok) throw new Error('Unable to create the PDF. Please try again.');
-    const blob = await response.blob();
-    if(!blob.type.includes('application/pdf')) throw new Error('The PDF service is unavailable.');
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.href = url;
+    const savedPdf = await window.calculatorAccount?.pdfFor(report);
+    const response = savedPdf ? null : await fetch('/api/report', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(report),signal:createPdfTimeoutSignal(45000)});
+    if(response && !response.ok) throw new Error('The PDF service could not create your report. Please retry.');
+    const blob = savedPdf || await response.blob();
+    if(!blob.type.includes('application/pdf') || await blob.slice(0,5).text() !== '%PDF-') throw new Error('The PDF service is unavailable on this version of the website.');
+    if(lastAnalyzedReport !== report) return;
+    clearPdfDownload();
+    pdfObjectUrl = URL.createObjectURL(blob);
+    pdfSaveLink.href = pdfObjectUrl;
     const name=report.preparedFor.replace(/[^a-zA-Z0-9 _-]/g,'').trim().replace(/\s+/g,'-') || 'Recipient';
-    link.download = 'Peter-Calculator-' + name + '.pdf';
-    document.body.appendChild(link);link.click();link.remove();
-    setTimeout(()=>URL.revokeObjectURL(url),60000);
-    pdfStatus.textContent = 'PDF downloaded for ' + report.preparedFor + '.';
-  } catch (error) { pdfStatus.textContent = error.message; }
+    pdfSaveLink.download = 'Peter-Calculator-' + name + '.pdf';
+    pdfSaveLink.hidden = false;
+    pdfSaveLink.click();
+    pdfStatus.textContent = 'PDF ready for ' + report.preparedFor + '. If it did not save, select Save PDF.';
+  } catch (error) { if(lastAnalyzedReport === report) pdfStatus.textContent = error.name === 'TimeoutError' ? 'PDF creation timed out. Please retry.' : error.message; }
   finally {pdfButton.textContent='Download PDF';pdfButton.disabled=!lastAnalyzedReport;}
 });
+window.addEventListener('calculator:account-changed', clearPdfDownload);
 document.title = ADVISOR_PROFILE.projectName;
 document.querySelectorAll('[data-advisor-name]').forEach(el => { el.textContent = ADVISOR_PROFILE.displayName; });
 document.querySelectorAll('[data-advisor-project]').forEach(el => { el.textContent = ADVISOR_PROFILE.projectName; });
@@ -1379,7 +1427,7 @@ async function fetchAndSetDSCRRate(){
 
       PRIME_RATE_URL,
 
-      { signal: AbortSignal.timeout ? AbortSignal.timeout(6000) : undefined }
+      { signal: createPdfTimeoutSignal(6000) }
 
     );
 
@@ -6165,6 +6213,7 @@ document.getElementById("calc-btn").addEventListener("click", () => {
   lastAnalyzedReport = {preparedFor, advisor:ADVISOR_PROFILE, inputs, results:d, reportDate:new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'})};
   pdfButton.disabled = false;
   pdfStatus.textContent = 'Your personalized deal report is ready to download.';
+  window.dispatchEvent(new CustomEvent('calculator:analyzed', {detail:lastAnalyzedReport}));
 
   saveLead({
 

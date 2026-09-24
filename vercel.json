@@ -9,7 +9,8 @@
     },
     "api/report.py": {
       "maxDuration": 30,
-      "excludeFiles": "{node_modules/**,docs/**,work/**,__pycache__/**}"
+      "excludeFiles": "{node_modules/**,docs/**,work/**,__pycache__/**,.env,.env.*,*.env,*.env.*,.vercel_python_packages/**}",
+      "includeFiles": "{report.py,public/*.png,dist/*.png}"
     }
   }
 }

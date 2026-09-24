@@ -4,3 +4,8 @@ __pycache__
 **/__pycache__
 *.pyc
 preview.py
+.env
+.env.*
+*.env
+*.env.*
+.vercel_python_packages
